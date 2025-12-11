@@ -7,6 +7,7 @@ from bot.database import Database
 from bot.ultraman_column_api import UltramanColumnAPIClient
 from bot.ultraman_news_api import UltramanNewsAPIClient
 from bot.x_api import XAPIClient
+from bot.youtube_api import YouTubeAPIClient
 from bot.discord_bot import LinkBot
 from utils.logger import setup_logger, get_logger
 
@@ -42,9 +43,10 @@ async def test_discord_post():
     print("1. Ultraman Columns")
     print("2. Ultraman News")
     print("3. X/Twitter")
+    print("4. YouTube")
     print("0. Cancel")
 
-    choice = input("\nEnter choice (0-3): ").strip()
+    choice = input("\nEnter choice (0-4): ").strip()
 
     if choice == "0":
         print("Cancelled.")
@@ -66,9 +68,22 @@ async def test_discord_post():
                 user_id=Config.UCG_EN_X_ID,
                 username=Config.TWITTER_USERNAME
             )
+            # Set source_name attribute for compatibility with discord_bot
+            scraper.source_name = "X/Twitter"
             logger.info("Testing X/Twitter...")
         else:
             logger.error("X API credentials not configured")
+            await db.close()
+            return
+    elif choice == "4":
+        if Config.YOUTUBE_API_KEY and Config.YOUTUBE_CHANNEL_ID:
+            scraper = YouTubeAPIClient(
+                api_key=Config.YOUTUBE_API_KEY,
+                channel_id=Config.YOUTUBE_CHANNEL_ID
+            )
+            logger.info("Testing YouTube...")
+        else:
+            logger.error("YouTube API credentials not configured")
             await db.close()
             return
     else:
@@ -89,15 +104,15 @@ async def test_discord_post():
 
     # Check if already posted
     is_seen = await db.is_post_seen(post_url)
+    force_post = False
 
     if is_seen:
         print("\n⚠️  This post has already been posted to Discord.")
-        clear = input("Do you want to clear it from database and post again? (y/n): ").strip().lower()
+        clear = input("Do you want to post it again anyway? (y/n): ").strip().lower()
 
         if clear == "y":
-            # Clear from database by deleting the entry
-            # Note: There's no delete method, so we'll just proceed and it will be marked as seen again
-            logger.info("Will post again (it will be marked as seen in database after posting)")
+            logger.info("Will post again (bypassing database check)")
+            force_post = True
         else:
             print("Skipping post (already in database)")
             await db.close()
@@ -139,9 +154,16 @@ async def test_discord_post():
         await db.close()
         return
 
-    # Manually trigger the check_source method
+    # Post to Discord
     print("Posting to Discord...")
-    await bot.check_source(scraper)
+    if force_post:
+        # Bypass database check - post directly
+        await bot.post_link(post_url, scraper.source_name)
+        # Optionally update the timestamp in database
+        await db.mark_post_seen(post_url, scraper.source_name)
+    else:
+        # Normal flow - check_source will verify it's not already posted
+        await bot.check_source(scraper)
 
     print("\n✓ Test complete! Check your Discord channel.\n")
 

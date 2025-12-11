@@ -191,8 +191,23 @@ class LinkBot(commands.Bot):
             try:
                 channel = self.get_channel(channel_id)
                 if channel:
-                    # Just send the link - Discord handles the preview!
-                    await channel.send(url)
+                    # Send the link and capture the message
+                    message = await channel.send(url)
+
+                    # Create thread from message (auto-archives after 24 hours)
+                    try:
+                        await message.create_thread(
+                            name=url[:100],  # Thread names max 100 characters
+                            auto_archive_duration=1440
+                        )
+                        logger.debug(f"Created thread for {url} in guild {guild_id}")
+                    except discord.Forbidden:
+                        logger.warning(f"Missing thread permissions in guild {guild_id}")
+                        # Post succeeded even if thread creation failed
+                    except discord.HTTPException as e:
+                        logger.warning(f"Could not create thread in guild {guild_id}: {e}")
+                        # Post succeeded even if thread creation failed
+
                     success += 1
                 else:
                     # Channel might have been deleted

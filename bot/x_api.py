@@ -23,7 +23,7 @@ class XAPIClient:
         self.base_url = "https://api.x.com/2"
 
     @retry_with_backoff(max_attempts=3, initial_delay=2.0, exceptions=(aiohttp.ClientError, Exception))
-    async def get_latest_tweet_url(self) -> Optional[str]:
+    async def get_latest_post_url(self) -> Optional[str]:
         """
         Fetch the latest tweet from the user and return its URL.
 

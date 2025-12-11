@@ -21,6 +21,10 @@ class Config:
     X_API_BEARER = os.getenv("X_API_BEARER")
     UCG_EN_X_ID = os.getenv("UCG_EN_X_ID")
 
+    # YouTube API credentials
+    YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+    YOUTUBE_CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID")
+
     # Sources to monitor (optional - configure which are active)
     FACEBOOK_PAGE = os.getenv("FACEBOOK_PAGE")
     TWITTER_USERNAME = os.getenv("TWITTER_USERNAME")
@@ -48,12 +52,17 @@ class Config:
         if cls.TWITTER_USERNAME and (not cls.X_API_BEARER or not cls.UCG_EN_X_ID):
             errors.append("X_API_BEARER and UCG_EN_X_ID are required when TWITTER_USERNAME is set")
 
+        # Check YouTube API credentials if YouTube is enabled
+        if cls.YOUTUBE_CHANNEL_ID and not cls.YOUTUBE_API_KEY:
+            errors.append("YOUTUBE_API_KEY is required when YOUTUBE_CHANNEL_ID is set")
+
         # Check that at least one source is configured
         has_source = any([
             cls.FACEBOOK_PAGE,
             cls.TWITTER_USERNAME,
             cls.ULTRAMAN_COLUMN_URL,
-            cls.ULTRAMAN_NEWS_URL
+            cls.ULTRAMAN_NEWS_URL,
+            cls.YOUTUBE_CHANNEL_ID
         ])
 
         if not has_source:
@@ -73,6 +82,8 @@ class Config:
             "DISCORD_BOT_TOKEN": "***" if cls.DISCORD_BOT_TOKEN else None,
             "X_API_BEARER": "***" if cls.X_API_BEARER else None,
             "UCG_EN_X_ID": cls.UCG_EN_X_ID,
+            "YOUTUBE_API_KEY": "***" if cls.YOUTUBE_API_KEY else None,
+            "YOUTUBE_CHANNEL_ID": cls.YOUTUBE_CHANNEL_ID,
             "FACEBOOK_PAGE": cls.FACEBOOK_PAGE,
             "TWITTER_USERNAME": cls.TWITTER_USERNAME,
             "ULTRAMAN_COLUMN_URL": cls.ULTRAMAN_COLUMN_URL,

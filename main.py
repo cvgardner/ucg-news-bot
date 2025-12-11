@@ -9,6 +9,7 @@ from bot.scraper import WebScraper
 from bot.x_api import XAPIClient
 from bot.ultraman_column_api import UltramanColumnAPIClient
 from bot.ultraman_news_api import UltramanNewsAPIClient
+from bot.youtube_api import YouTubeAPIClient
 from bot.discord_bot import LinkBot
 from bot.parsers import (
     parse_facebook,
@@ -145,6 +146,18 @@ async def main():
             scraper = UltramanNewsAPIClient()
             scrapers.append(scraper)
             logger.info("Monitoring Ultraman News via API")
+
+        if Config.YOUTUBE_CHANNEL_ID:
+            # Use YouTube Data API v3
+            if Config.YOUTUBE_API_KEY:
+                scraper = YouTubeAPIClient(
+                    api_key=Config.YOUTUBE_API_KEY,
+                    channel_id=Config.YOUTUBE_CHANNEL_ID
+                )
+                scrapers.append(scraper)
+                logger.info(f"Monitoring YouTube via API: Channel {Config.YOUTUBE_CHANNEL_ID}")
+            else:
+                logger.warning("YouTube enabled but YOUTUBE_API_KEY not configured, skipping")
 
         if not scrapers:
             logger.error("No sources configured! Please configure at least one source in .env")

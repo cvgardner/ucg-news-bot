@@ -4,6 +4,7 @@ from bot.scraper import WebScraper
 from bot.x_api import XAPIClient
 from bot.ultraman_column_api import UltramanColumnAPIClient
 from bot.ultraman_news_api import UltramanNewsAPIClient
+from bot.youtube_api import YouTubeAPIClient
 from bot.parsers import (
     parse_facebook,
 )
@@ -27,7 +28,7 @@ async def test_twitter():
         user_id=Config.UCG_EN_X_ID,
         username=Config.TWITTER_USERNAME
     )
-    url = await client.get_latest_tweet_url()
+    url = await client.get_latest_post_url()
 
     if url:
         print(f"✓ Success! Latest tweet: {url}")
@@ -86,6 +87,32 @@ async def test_ultraman_news():
         print(f"✓ Success! Latest news: {url}")
     else:
         print("✗ Failed to fetch from Ultraman News API")
+    print()
+
+
+async def test_youtube():
+    """Test YouTube Data API v3"""
+    print("=" * 60)
+    print("Testing YouTube Data API v3...")
+    print("=" * 60)
+
+    if not Config.YOUTUBE_API_KEY or not Config.YOUTUBE_CHANNEL_ID:
+        print("✗ YouTube API credentials not configured")
+        print("  Please set YOUTUBE_API_KEY and YOUTUBE_CHANNEL_ID in .env")
+        print()
+        return
+
+    client = YouTubeAPIClient(
+        api_key=Config.YOUTUBE_API_KEY,
+        channel_id=Config.YOUTUBE_CHANNEL_ID
+    )
+    url = await client.get_latest_post_url()
+
+    if url:
+        print(f"✓ Success! Latest video: {url}")
+    else:
+        print("✗ Failed to fetch video from YouTube API")
+        print("  (Check quota limits or API key validity)")
     print()
 
 
