@@ -1,10 +1,10 @@
 # UCG News Bot
 
-A stateless Discord bot that monitors multiple Ultraman Card Game (UCG) news sources and automatically posts updates to Discord channels. Runs as a GitHub Actions cron job every 15 minutes.
+A stateless Discord bot that monitors multiple Ultraman Card Game (UCG) news sources and automatically posts updates to Discord channels. Can run as a GitHub Actions cron job or on GCP Cloud Run with Cloud Scheduler.
 
 ## Features
 
-- **🤖 Fully Automated**: Runs on GitHub Actions - no server required
+- **🤖 Fully Automated**: Runs on GitHub Actions or GCP Cloud Run - no 24/7 server required
 - **📡 Multi-Source Monitoring**:
   - X/Twitter ([@ucg_en](https://twitter.com/ucg_en))
   - YouTube (@ultramancardgame_official)
@@ -14,52 +14,70 @@ A stateless Discord bot that monitors multiple Ultraman Card Game (UCG) news sou
 - **🔄 Smart Deduplication**: Prevents duplicate posts using SQLite database
 - **🌐 Multi-Server Support**: Posts to all Discord servers with configured channel name
 - **⚡ Stateless Design**: Quick execution (~5-10 seconds per run)
-- **🔒 Secure**: API credentials stored as GitHub secrets
-- **📊 Cost Effective**: Free tier GitHub Actions (2,000 minutes/month)
+- **🔒 Secure**: API credentials stored as GitHub Secrets or GCP Secret Manager
+- **📊 Cost Effective**: Free tier on both GitHub Actions and GCP
+- **☁️ Flexible Deployment**: Choose between GitHub Actions or GCP Cloud Run
 
 ## Architecture
 
 Unlike traditional Discord bots that run 24/7, this bot uses a **stateless cron approach**:
 
-1. **GitHub Actions** triggers the bot every 15 minutes
+1. **Scheduler** (GitHub Actions or Cloud Scheduler) triggers the bot every 15 minutes
 2. Bot checks all configured sources for new content
 3. Posts new content to Discord channels (by name: `ucg-news-bot`)
 4. Updates database and exits
-5. Database persists between runs via GitHub Actions artifacts
+5. Database persists between runs (GitHub Actions artifacts or Cloud Storage)
 
 **Benefits**:
-- No server hosting costs
+- No server hosting costs (free tier on both platforms)
 - No uptime management
-- Reliable execution via GitHub's infrastructure
+- Reliable execution via cloud infrastructure
 - Easy to maintain and debug
+
+**Deployment Options**:
+- **GitHub Actions**: Uses artifacts for database persistence, runs in GitHub's infrastructure
+- **GCP Cloud Run**: Uses Cloud Storage for database persistence, more reliable for production
 
 ## Prerequisites
 
+### Required for All Deployments
 - Discord Bot Token
 - X/Twitter API Bearer Token (for @ucg_en monitoring)
 - YouTube Data API v3 Key (for YouTube monitoring)
+
+### Additional for GitHub Actions
 - GitHub account (for Actions hosting)
 
-## Quick Start
+### Additional for GCP Cloud Run
+- Google Cloud Platform account with billing enabled
+- `gcloud` CLI installed and configured
 
-### 1. Fork/Clone Repository
+## Deployment Guide
+
+Choose your deployment platform:
+- [GitHub Actions](#github-actions-deployment) - Simple, free tier, good for personal use
+- [GCP Cloud Run](#gcp-cloud-run-deployment) - More reliable, production-ready, also free tier
+
+### Common Setup (Required for Both)
+
+#### 1. Fork/Clone Repository
 
 ```bash
 git clone https://github.com/yourusername/ucg-news-bot.git
 cd ucg-news-bot
 ```
 
-### 2. Set Up Discord Bot
+#### 2. Set Up Discord Bot
 
 1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
 2. Create a new application
 3. Go to "Bot" section and create a bot
-4. Copy the bot token (you'll need this for GitHub secrets)
+4. Copy the bot token (you'll need this later)
 5. Under "Privileged Gateway Intents", enable:
    - ✅ Server Members Intent
    - ✅ Message Content Intent (optional)
 
-### 3. Generate Bot Invite Link
+#### 3. Generate Bot Invite Link
 
 1. In Discord Developer Portal, go to "OAuth2" > "URL Generator"
 2. Select scopes:
@@ -71,27 +89,31 @@ cd ucg-news-bot
    - ✅ View Channels
 4. Copy the generated URL and invite the bot to your Discord server(s)
 
-### 4. Create Discord Channel
+#### 4. Create Discord Channel
 
 In each Discord server where you added the bot:
 1. Create a text channel named `ucg-news-bot`
 2. Ensure the bot has permissions to view and send messages
 
-### 5. Get API Credentials
+#### 5. Get API Credentials
 
-#### X/Twitter API
+**X/Twitter API:**
 1. Go to [X Developer Portal](https://developer.twitter.com/)
 2. Create a new app (Free tier is sufficient)
 3. Copy your Bearer Token
 
-#### YouTube Data API v3
+**YouTube Data API v3:**
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project
 3. Enable "YouTube Data API v3"
 4. Create credentials (API Key)
 5. Copy the API key
 
-### 6. Configure GitHub Secrets
+---
+
+### GitHub Actions Deployment
+
+#### 6. Configure GitHub Secrets
 
 In your GitHub repository, you only need to add **3 secrets** (actual credentials):
 
@@ -106,7 +128,7 @@ In your GitHub repository, you only need to add **3 secrets** (actual credential
 
 **Note**: Public identifiers (channel IDs, usernames, URLs) are already hardcoded in the workflow file - you don't need to add them as secrets!
 
-### 7. Enable GitHub Actions
+#### 7. Enable GitHub Actions
 
 1. Go to your repository's **Actions** tab
 2. If prompted, click **"I understand my workflows, go ahead and enable them"**
@@ -114,6 +136,81 @@ In your GitHub repository, you only need to add **3 secrets** (actual credential
 4. You can also trigger it manually:
    - Go to **Actions** > **UCG News Bot**
    - Click **"Run workflow"** > **"Run workflow"**
+
+---
+
+### GCP Cloud Run Deployment
+
+For a more reliable production deployment, you can use GCP Cloud Run + Cloud Scheduler. This approach offers better reliability and monitoring compared to GitHub Actions.
+
+#### 1. Set Up GCP Project
+
+```bash
+# Set your project ID
+export GCP_PROJECT_ID="your-project-id"
+export GCP_REGION="us-central1"
+
+# Login to gcloud
+gcloud auth login
+
+# Set project
+gcloud config set project ${GCP_PROJECT_ID}
+```
+
+#### 2. Add Secrets to Secret Manager
+
+Run the interactive setup script to securely add your credentials:
+
+```bash
+./setup-secrets.sh
+```
+
+This will prompt you to enter your:
+- Discord Bot Token
+- X/Twitter API Bearer Token
+- YouTube API Key
+
+#### 3. Deploy to Cloud Run
+
+Run the deployment script:
+
+```bash
+./deploy.sh
+```
+
+This automated script will:
+- Enable required GCP APIs (Cloud Build, Cloud Run, Cloud Scheduler, Cloud Storage)
+- Create a Cloud Storage bucket for database persistence
+- Build and deploy your container image
+- Create a Cloud Run Job
+- Set up Cloud Scheduler to run the job every 15 minutes
+
+#### 4. Verify Deployment
+
+**Test the job manually:**
+```bash
+gcloud run jobs execute ucg-news-bot --region=${GCP_REGION}
+```
+
+**View logs:**
+```bash
+gcloud logging read "resource.type=cloud_run_job AND resource.labels.job_name=ucg-news-bot" --limit=50
+```
+
+**Check Cloud Scheduler:**
+```bash
+gcloud scheduler jobs list --location=${GCP_REGION}
+```
+
+#### 5. Monitor Your Bot
+
+- **Cloud Console**: Go to Cloud Run → Jobs → ucg-news-bot
+- **Logs**: Cloud Console → Logging → Logs Explorer
+- **Scheduler**: Cloud Console → Cloud Scheduler
+
+The job will automatically run every 15 minutes. Database state is preserved in Cloud Storage between runs.
+
+---
 
 ## Local Development & Testing
 
@@ -373,6 +470,8 @@ To test or force a check:
 
 ## Cost Estimate
 
+Both deployment options stay within free tiers!
+
 ### GitHub Actions (Free Tier)
 - **Monthly limit**: 2,000 minutes
 - **Bot runtime**: ~8 seconds per run
@@ -380,7 +479,15 @@ To test or force a check:
 - **Total usage**: ~384 minutes/month
 - **Cost**: **FREE** ✅
 
-### API Costs
+### GCP Cloud Run (Free Tier)
+- **Free tier**: 2 million requests, 360,000 vCPU-seconds, 180,000 GiB-seconds per month
+- **Bot runtime**: ~8 seconds per run, minimal memory
+- **Runs per month**: 2,880 (96/day × 30 days)
+- **Total usage**: ~384 minutes/month ≈ 23,040 CPU-seconds
+- **Cloud Storage**: ~1 MB database file
+- **Cost**: **FREE** ✅ (well within limits)
+
+### API Costs (Both Deployments)
 - **X API Free Tier**: 50 requests per 15 min - **FREE** ✅
 - **YouTube Data API Free Tier**: 10,000 quota units/day - **FREE** ✅
 - **Ultraman APIs**: Unofficial, no rate limits - **FREE** ✅
@@ -390,10 +497,12 @@ To test or force a check:
 ## Security Best Practices
 
 ✅ **Never commit credentials** to git
-✅ **Use GitHub Secrets** for all API keys
+✅ **Use GitHub Secrets or GCP Secret Manager** for all API keys
 ✅ **.env file is in .gitignore**
 ✅ **.env.example has placeholders** only
 ✅ **Bot token has minimal permissions**
+✅ **GCP deployment uses Secret Manager** for secure credential storage
+✅ **Database backups** via Cloud Storage (GCP) or Artifacts (GitHub Actions)
 
 ## Contributing
 

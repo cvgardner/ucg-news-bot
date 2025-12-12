@@ -1,0 +1,53 @@
+# Git files
+.git
+.github
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.so
+.Python
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+README.md
+*.md
+
+# Test files
+test_*.py
+
+# Old/archived files (no longer used)
+main.py
+bot/discord_bot.py
+
+# OS files
+.DS_Store
+Thumbs.db

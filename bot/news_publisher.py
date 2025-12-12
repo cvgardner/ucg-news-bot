@@ -176,16 +176,26 @@ class NewsPublisher:
 
                     # Create thread from message (auto-archives after 24 hours)
                     try:
+                        # Validate thread name - ensure it's not empty and has minimum length
+                        thread_name = url[:100].strip() if url else "Discussion"
+                        if len(thread_name) < 1:
+                            thread_name = "Discussion"
+
                         await message.create_thread(
-                            name=url[:100],  # Thread names max 100 characters
+                            name=thread_name,
                             auto_archive_duration=1440
                         )
-                        logger.debug(f"Created thread for {url} in {guild.name}")
+                        logger.info(f"✓ Created thread '{thread_name}' in {guild.name}")
                     except discord.Forbidden:
-                        logger.warning(f"Missing thread permissions in {guild.name}")
+                        logger.error(f"✗ THREAD CREATION FAILED: Missing 'Create Public Threads' permission in {guild.name}")
+                        logger.error(f"   → Please enable 'Create Public Threads' permission for the bot role in {guild.name}")
                         # Post succeeded even if thread creation failed
                     except discord.HTTPException as e:
-                        logger.warning(f"Could not create thread in {guild.name}: {e}")
+                        logger.error(f"✗ THREAD CREATION FAILED in {guild.name}: {e}")
+                        logger.error(f"   → Discord API error. Channel type: {channel.type}")
+                        # Post succeeded even if thread creation failed
+                    except Exception as e:
+                        logger.error(f"✗ THREAD CREATION FAILED in {guild.name}: Unexpected error - {e}")
                         # Post succeeded even if thread creation failed
 
                     success += 1
