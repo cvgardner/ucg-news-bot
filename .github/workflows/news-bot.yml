@@ -41,7 +41,7 @@ jobs:
 
           # Public configuration (hardcoded)
           CHANNEL_NAME: ucg-news-bot
-          UCG_EN_X_ID: 1798233243185303552
+          UCG_EN_X_ID: "1798233243185303552"
           TWITTER_USERNAME: ucg_en
           YOUTUBE_CHANNEL_ID: UC0WwX8aoBWRAdQ2bM-FD8TQ
           ULTRAMAN_COLUMN_URL: https://ultraman-cardgame.com/page/us/column/column-list
