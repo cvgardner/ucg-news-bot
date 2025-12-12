@@ -345,7 +345,7 @@ To test or force a check:
 ### API Rate Limits
 
 **X API**: Free tier has strict rate limits
-- Default: 50 requests per 15 minutes
+- Default: Get posts form user 1 per 15 min
 - Bot checks once per 15 minutes (96 times/day)
 - Should stay within limits
 
