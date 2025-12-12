@@ -1,9 +1,10 @@
 name: UCG News Bot
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"  # Every 15 minutes
   workflow_dispatch:  # Manual trigger for testing
+  schedule:
+    - cron: "*15 * * * *"  # Every 15 minutes
+
 
 jobs:
   check-news:
