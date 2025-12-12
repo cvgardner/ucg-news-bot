@@ -8,8 +8,8 @@ from bot.ultraman_column_api import UltramanColumnAPIClient
 from bot.ultraman_news_api import UltramanNewsAPIClient
 from bot.x_api import XAPIClient
 from bot.youtube_api import YouTubeAPIClient
-from bot.discord_bot import LinkBot
-from utils.logger import setup_logger, get_logger
+from bot.news_publisher import NewsPublisher
+from utils.logger import setup_logger
 
 
 async def test_discord_post():
@@ -118,65 +118,37 @@ async def test_discord_post():
             await db.close()
             return
 
-    # Initialize Discord bot
-    logger.info("Initializing Discord bot...")
-    bot = LinkBot(
-        token=Config.DISCORD_BOT_TOKEN,
-        scrapers=[scraper],  # Just this one scraper for testing
-        database=db,
+    # Initialize NewsPublisher
+    logger.info("Initializing NewsPublisher...")
+    publisher = NewsPublisher(
+        bot_token=Config.DISCORD_BOT_TOKEN,
         channel_name=Config.CHANNEL_NAME,
-        poll_interval=Config.POLL_INTERVAL_SECONDS
+        database_path=Config.DATABASE_PATH
     )
 
-    # Start bot and wait for it to be ready
-    print("\nConnecting to Discord...")
-
-    # Create a task to start the bot
-    bot_task = asyncio.create_task(bot.start(Config.DISCORD_BOT_TOKEN))
-
-    # Wait for bot to be ready
-    await asyncio.sleep(3)
-
-    if not bot.is_ready():
-        logger.error("Bot failed to connect to Discord")
-        await bot.close()
-        await db.close()
-        return
-
-    print(f"\n✓ Connected to Discord as {bot.user.name}")
-    print(f"✓ Connected to {len(bot.guilds)} server(s)")
-    print(f"✓ Found {len(bot.channel_cache)} channel(s) to post to\n")
-
-    if len(bot.channel_cache) == 0:
-        logger.warning(f"No '{Config.CHANNEL_NAME}' channels found in any servers!")
-        logger.warning("Make sure the bot has access to a channel with that name.")
-        await bot.close()
-        await db.close()
-        return
-
     # Post to Discord
-    print("Posting to Discord...")
-    if force_post:
-        # Bypass database check - post directly
-        await bot.post_link(post_url, scraper.source_name)
-        # Optionally update the timestamp in database
-        await db.mark_post_seen(post_url, scraper.source_name)
-    else:
-        # Normal flow - check_source will verify it's not already posted
-        await bot.check_source(scraper)
+    print("\nPosting to Discord...")
+    try:
+        await publisher._post_to_discord(post_url, scraper.source_name)
 
-    print("\n✓ Test complete! Check your Discord channel.\n")
+        # Mark as seen in database
+        if force_post:
+            # Update timestamp even though already seen
+            await db.mark_post_seen(post_url, scraper.source_name)
+        else:
+            # Mark as seen for first time
+            await db.mark_post_seen(post_url, scraper.source_name)
+
+        print("\n✓ Test complete! Check your Discord channel.\n")
+    except Exception as e:
+        logger.error(f"Error posting to Discord: {e}", exc_info=True)
+        print(f"\n✗ Failed to post: {e}\n")
 
     # Cleanup
-    await bot.close()
     await db.close()
 
-    # Cancel the bot task
-    bot_task.cancel()
-    try:
-        await bot_task
-    except asyncio.CancelledError:
-        pass
+    # Give asyncio time to clean up any pending tasks/connections
+    await asyncio.sleep(0.1)
 
 
 if __name__ == "__main__":
@@ -188,3 +160,12 @@ if __name__ == "__main__":
         print(f"\nError: {e}")
         import traceback
         traceback.print_exc()
+    finally:
+        # Ensure all async resources are cleaned up
+        import asyncio as aio
+        try:
+            loop = aio.get_event_loop()
+            if loop.is_running():
+                loop.stop()
+        except RuntimeError:
+            pass

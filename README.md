@@ -1,352 +1,433 @@
 # UCG News Bot
 
-A Discord bot that automatically monitors the [@ucg_en](https://twitter.com/ucg_en) Twitter/X account and posts new tweets to Discord servers using RSSHub.
+A stateless Discord bot that monitors multiple Ultraman Card Game (UCG) news sources and automatically posts updates to Discord channels. Runs as a GitHub Actions cron job every 15 minutes.
 
 ## Features
 
-- **No Twitter API required!** Uses RSSHub for free access to Twitter feeds
-- Monitors Twitter account in real-time
-- Posts new tweets to designated Discord channels across multiple servers
-- Beautiful Discord embeds with images and tweet metadata
-- Automatic deduplication to prevent duplicate posts
-- Robust error handling and retry logic
-- Persistent state management using SQLite
-- Configurable polling interval
-- Multi-server support
+- **🤖 Fully Automated**: Runs on GitHub Actions - no server required
+- **📡 Multi-Source Monitoring**:
+  - X/Twitter ([@ucg_en](https://twitter.com/ucg_en))
+  - YouTube (@ultramancardgame_official)
+  - Ultraman Columns (official API)
+  - Ultraman News (official API)
+- **💬 Automatic Thread Creation**: Creates discussion threads for each post
+- **🔄 Smart Deduplication**: Prevents duplicate posts using SQLite database
+- **🌐 Multi-Server Support**: Posts to all Discord servers with configured channel name
+- **⚡ Stateless Design**: Quick execution (~5-10 seconds per run)
+- **🔒 Secure**: API credentials stored as GitHub secrets
+- **📊 Cost Effective**: Free tier GitHub Actions (2,000 minutes/month)
+
+## Architecture
+
+Unlike traditional Discord bots that run 24/7, this bot uses a **stateless cron approach**:
+
+1. **GitHub Actions** triggers the bot every 15 minutes
+2. Bot checks all configured sources for new content
+3. Posts new content to Discord channels (by name: `ucg-news-bot`)
+4. Updates database and exits
+5. Database persists between runs via GitHub Actions artifacts
+
+**Benefits**:
+- No server hosting costs
+- No uptime management
+- Reliable execution via GitHub's infrastructure
+- Easy to maintain and debug
 
 ## Prerequisites
 
-- Python 3.9 or higher
-- Discord Bot Token (free)
-- **No Twitter API credentials needed!**
+- Discord Bot Token
+- X/Twitter API Bearer Token (for @ucg_en monitoring)
+- YouTube Data API v3 Key (for YouTube monitoring)
+- GitHub account (for Actions hosting)
 
-## Installation
+## Quick Start
 
-1. Clone this repository:
+### 1. Fork/Clone Repository
+
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/yourusername/ucg-news-bot.git
 cd ucg-news-bot
 ```
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+### 2. Set Up Discord Bot
 
-3. Configure environment variables:
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Create a new application
+3. Go to "Bot" section and create a bot
+4. Copy the bot token (you'll need this for GitHub secrets)
+5. Under "Privileged Gateway Intents", enable:
+   - ✅ Server Members Intent
+   - ✅ Message Content Intent (optional)
+
+### 3. Generate Bot Invite Link
+
+1. In Discord Developer Portal, go to "OAuth2" > "URL Generator"
+2. Select scopes:
+   - `bot`
+3. Select bot permissions:
+   - ✅ Send Messages
+   - ✅ Create Public Threads
+   - ✅ Send Messages in Threads
+   - ✅ View Channels
+4. Copy the generated URL and invite the bot to your Discord server(s)
+
+### 4. Create Discord Channel
+
+In each Discord server where you added the bot:
+1. Create a text channel named `ucg-news-bot`
+2. Ensure the bot has permissions to view and send messages
+
+### 5. Get API Credentials
+
+#### X/Twitter API
+1. Go to [X Developer Portal](https://developer.twitter.com/)
+2. Create a new app (Free tier is sufficient)
+3. Copy your Bearer Token
+
+#### YouTube Data API v3
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project
+3. Enable "YouTube Data API v3"
+4. Create credentials (API Key)
+5. Copy the API key
+
+### 6. Configure GitHub Secrets
+
+In your GitHub repository, you only need to add **3 secrets** (actual credentials):
+
+1. Go to **Settings** > **Secrets and variables** > **Actions**
+2. Click **"New repository secret"** and add each of the following:
+
+| Secret Name | Description | Example Value |
+|-------------|-------------|---------------|
+| `DISCORD_BOT_TOKEN` | Your Discord bot token | `ODc0NDI2MDg5MDA...` |
+| `X_API_BEARER` | X/Twitter API Bearer token | `AAAAAAAAAAAAA...` |
+| `YOUTUBE_API_KEY` | YouTube Data API v3 key | `AIzaSyD4YjC4R...` |
+
+**Note**: Public identifiers (channel IDs, usernames, URLs) are already hardcoded in the workflow file - you don't need to add them as secrets!
+
+### 7. Enable GitHub Actions
+
+1. Go to your repository's **Actions** tab
+2. If prompted, click **"I understand my workflows, go ahead and enable them"**
+3. The workflow will run automatically every 15 minutes
+4. You can also trigger it manually:
+   - Go to **Actions** > **UCG News Bot**
+   - Click **"Run workflow"** > **"Run workflow"**
+
+## Local Development & Testing
+
+### Setup Local Environment
+
+1. Copy the environment template:
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and add your Discord bot token (see Configuration section below).
-
-## Configuration
-
-### Discord Bot Setup
-
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application" and give it a name
-3. Go to the "Bot" section and click "Add Bot"
-4. Click "Reset Token" to get your bot token
-5. Copy the token to your `.env` file as `DISCORD_BOT_TOKEN`
-6. Under "Privileged Gateway Intents", you can leave defaults (no special intents needed)
-
-### Generate Bot Invite Link
-
-1. In the Discord Developer Portal, go to "OAuth2" > "URL Generator"
-2. Select scopes:
-   - `bot`
-3. Select bot permissions:
-   - Send Messages
-   - Embed Links
-   - Read Message History
-   - View Channels
-4. Copy the generated URL and use it to invite the bot to your Discord servers
-
-### Create Target Channel
-
-In each Discord server where you add the bot:
-1. Create a text channel named `ucg-news-bot` (or your custom channel name)
-2. Ensure the bot has permissions to view and send messages in this channel
-
-### Environment Variables
-
-Edit your `.env` file with the following variables:
-
+2. Edit `.env` and add your credentials:
 ```bash
-# Required Configuration
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
-
-# Twitter/X Settings (No API key needed!)
-TWITTER_USERNAME=ucg_en                # Twitter account to monitor
-RSSHUB_INSTANCE=https://rsshub.app     # RSSHub instance URL
-
-# Bot Settings (optional)
-POLL_INTERVAL_SECONDS=180              # How often to check for new tweets (seconds)
-CHANNEL_NAME=ucg-news-bot              # Discord channel name to post in
-LOG_LEVEL=INFO                         # Logging level (DEBUG, INFO, WARNING, ERROR)
-DATABASE_PATH=./bot_data.db            # SQLite database path
+CHANNEL_NAME=ucg-news-bot
+X_API_BEARER=your_x_api_bearer_token_here
+UCG_EN_X_ID=1798233243185303552
+TWITTER_USERNAME=ucg_en
+YOUTUBE_API_KEY=your_youtube_api_key_here
+YOUTUBE_CHANNEL_ID=UC0WwX8aoBWRAdQ2bM-FD8TQ
+ULTRAMAN_COLUMN_URL=https://ultraman-cardgame.com/page/us/column/column-list
+ULTRAMAN_NEWS_URL=https://ultraman-cardgame.com/page/us/news/news-list
+LOG_LEVEL=INFO
+DATABASE_PATH=./bot_data.db
 ```
 
-## Usage
-
-### Running Locally
-
-Start the bot:
+3. Install dependencies:
 ```bash
-python main.py
+pip install -r requirements.txt
 ```
 
-The bot will:
-1. Connect to Discord
-2. Discover all channels named `ucg-news-bot` in your servers
-3. Initialize with the latest tweet (without posting it)
-4. Begin polling RSSHub every 3 minutes for new tweets
-5. Automatically post new tweets to all configured channels
+### Run Locally
 
-### Stopping the Bot
+Execute the cron script:
+```bash
+python run_cron.py
+```
 
-Press `Ctrl+C` to gracefully shutdown the bot. The bot will:
-- Save its current state
-- Close all connections
-- Exit cleanly
+This will:
+1. Check all configured sources for new content
+2. Post any new content to Discord
+3. Update the database
+4. Exit
 
-## How It Works
+### Test Individual Sources
 
-This bot uses **RSSHub** instead of the Twitter API, which means:
-- ✅ Completely free - no API costs
-- ✅ No Twitter developer account needed
-- ✅ No authentication tokens required
-- ✅ Easy to set up and maintain
+Use the test script to check specific sources:
+```bash
+python test_discord_post.py
+```
 
-### Architecture
-
-1. **Polling**: Every 3 minutes (configurable), the bot fetches the RSS feed from RSSHub
-2. **Parsing**: RSS entries are parsed to extract tweet content, media, and metadata
-3. **Filtering**: Only tweets newer than the last processed tweet ID are selected
-4. **Broadcasting**: New tweets are formatted as Discord embeds and sent to all configured channels
-5. **State Management**: Tweet IDs are stored in SQLite to prevent duplicates
-
-### RSSHub
-
-RSSHub is an open-source RSS feed generator that supports Twitter and many other platforms:
-- Public instance: https://rsshub.app
-- Can be self-hosted for better reliability
-- Provides RSS feeds for Twitter users without needing API access
+Then select which source to test:
+- 1: Ultraman Columns
+- 2: Ultraman News
+- 3: X/Twitter
+- 4: YouTube
 
 ## Project Structure
 
 ```
 ucg-news-bot/
-├── main.py                   # Application entry point
-├── config.py                 # Configuration loader
-├── requirements.txt          # Python dependencies
-├── .env                      # Environment variables (not in git)
-├── .env.example              # Template for environment variables
+├── run_cron.py                   # Main entry point for cron execution
+├── config.py                     # Configuration loader
+├── requirements.txt              # Python dependencies
+├── .env.example                  # Environment template
+├── .github/
+│   └── workflows/
+│       └── news-bot.yml         # GitHub Actions workflow
 ├── bot/
-│   ├── discord_bot.py       # Discord bot implementation
-│   ├── twitter_monitor.py   # RSSHub RSS feed client
-│   ├── message_formatter.py # Discord embed formatting
-│   └── database.py          # SQLite database operations
+│   ├── news_publisher.py        # Stateless news publisher
+│   ├── x_api.py                 # X/Twitter API client
+│   ├── youtube_api.py           # YouTube Data API client
+│   ├── ultraman_column_api.py   # Ultraman Columns API client
+│   ├── ultraman_news_api.py     # Ultraman News API client
+│   └── database.py              # SQLite database operations
 └── utils/
-    ├── logger.py            # Logging configuration
-    └── error_handler.py     # Error handling utilities
+    ├── logger.py                # Logging configuration
+    └── error_handler.py         # Error handling utilities
 ```
 
-## Deployment
+## How It Works
 
-### Local Deployment
+### GitHub Actions Workflow
 
-Use a process manager like `systemd` (Linux), `launchd` (macOS), or `screen`/`tmux` to keep the bot running:
+The workflow (`.github/workflows/news-bot.yml`) runs every 15 minutes:
 
-```bash
-# Using screen
-screen -S ucg-bot
-python main.py
-# Press Ctrl+A then D to detach
+```yaml
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes
+  workflow_dispatch:        # Manual trigger
 ```
 
-### Cloud Deployment
+**Workflow Steps**:
+1. **Checkout code**: Gets the latest code from repository
+2. **Set up Python**: Installs Python 3.11
+3. **Install dependencies**: Installs required packages
+4. **Download database**: Retrieves database from previous run (via artifacts)
+5. **Run news check**: Executes `run_cron.py` with secrets as environment variables
+6. **Upload database**: Saves updated database for next run
 
-#### Railway / Render / Fly.io
+### Database Persistence
 
-1. Create a new project
-2. Connect your Git repository
-3. Add environment variables in the dashboard
-4. Deploy
+Since GitHub Actions are stateless, the database is preserved using **artifacts**:
+- After each run, `bot_data.db` is uploaded as an artifact
+- Before each run, the previous database is downloaded
+- Artifacts are kept for 7 days
+- This prevents duplicate posts across runs
 
-#### Docker
+### Source Monitoring
 
-Build the Docker image:
-```bash
-docker build -t ucg-news-bot .
+Each source is checked sequentially:
+
+**X/Twitter** (`bot/x_api.py`):
+- Uses X API v2 to fetch latest tweets from @ucg_en
+- Filters for [EN] tweets if needed
+- Returns tweet URL
+
+**YouTube** (`bot/youtube_api.py`):
+- Uses YouTube Data API v3 search endpoint
+- Fetches latest videos from channel
+- Filters for [EN] videos
+- Returns video URL
+
+**Ultraman Columns** (`bot/ultraman_column_api.py`):
+- Calls unofficial Ultraman API endpoint
+- Fetches latest column articles
+- Returns article URL
+
+**Ultraman News** (`bot/ultraman_news_api.py`):
+- Calls unofficial Ultraman API endpoint
+- Fetches latest news articles
+- Filters out pinned articles
+- Returns article URL
+
+### Deduplication
+
+The SQLite database (`bot_data.db`) tracks posted content:
+
+```sql
+CREATE TABLE posted_content (
+    url TEXT PRIMARY KEY,
+    posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    source TEXT
+);
 ```
 
-Run the container:
-```bash
-docker run -d \
-  --name ucg-news-bot \
-  --env-file .env \
-  -v $(pwd)/data:/app/data \
-  ucg-news-bot
+Before posting, the bot checks if the URL already exists in the database.
+
+### Discord Posting
+
+When new content is found:
+1. Bot connects to Discord
+2. Discovers all channels named `ucg-news-bot` across all servers
+3. Posts the URL to each channel
+4. Creates a discussion thread for each post (24-hour auto-archive)
+5. Marks the URL as posted in the database
+6. Disconnects and exits
+
+## Configuration
+
+### Channel Name
+
+By default, the bot posts to channels named `ucg-news-bot`. To change this, update the workflow:
+
+```yaml
+env:
+  CHANNEL_NAME: your-custom-channel-name
 ```
 
-Create a `Dockerfile`:
-```dockerfile
-FROM python:3.11-slim
+### Cron Schedule
 
-WORKDIR /app
+To change how often the bot runs, edit `.github/workflows/news-bot.yml`:
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-CMD ["python", "main.py"]
+```yaml
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # Every 30 minutes
+    # or
+    - cron: '0 * * * *'     # Every hour
 ```
 
-#### VPS (DigitalOcean, AWS EC2, etc.)
+[Cron syntax reference](https://crontab.guru/)
 
-1. SSH into your server
-2. Clone the repository
-3. Install Python and dependencies
-4. Create a systemd service:
+### Enable/Disable Sources
 
-```bash
-sudo nano /etc/systemd/system/ucg-news-bot.service
-```
+To disable a source, remove its credentials from GitHub secrets. The bot will skip sources with missing credentials.
 
-```ini
-[Unit]
-Description=UCG News Bot
-After=network.target
+## Monitoring
 
-[Service]
-Type=simple
-User=your-user
-WorkingDirectory=/path/to/ucg-news-bot
-Environment="PATH=/path/to/venv/bin"
-ExecStart=/path/to/venv/bin/python main.py
-Restart=always
-RestartSec=10
+### Check Workflow Runs
 
-[Install]
-WantedBy=multi-user.target
-```
+1. Go to **Actions** tab in your repository
+2. Click on **UCG News Bot** workflow
+3. View recent runs and their logs
 
-Enable and start:
-```bash
-sudo systemctl enable ucg-news-bot
-sudo systemctl start ucg-news-bot
-sudo systemctl status ucg-news-bot
-```
+### Logs
+
+Each workflow run produces detailed logs:
+- Source checking progress
+- New posts found
+- Discord posting results
+- Errors and warnings
+
+### Manual Trigger
+
+To test or force a check:
+1. Go to **Actions** > **UCG News Bot**
+2. Click **"Run workflow"**
+3. Select branch and click **"Run workflow"**
 
 ## Troubleshooting
 
-### Bot doesn't post tweets
+### Bot Not Posting
 
-- Check that RSSHub is accessible: Visit `https://rsshub.app/twitter/user/ucg_en` in your browser
-- Verify Twitter username is correct in `.env`
-- Check logs for error messages
-- Try increasing poll interval if getting rate limited
+**Check workflow is running**:
+- Go to Actions tab
+- Verify recent runs exist
+- Check for error messages in logs
 
-### Bot can't send messages in Discord
+**Verify secrets are set**:
+- Settings > Secrets and variables > Actions
+- Ensure all required secrets exist
 
-- Verify bot has "Send Messages" and "Embed Links" permissions
-- Ensure channel name matches `CHANNEL_NAME` in `.env`
-- Check bot role hierarchy in server settings
+**Check Discord permissions**:
+- Bot has "Send Messages" permission
+- Bot has "Create Public Threads" permission
+- Channel named `ucg-news-bot` exists
 
-### Database errors
+### API Rate Limits
 
-- Ensure the bot has write permissions in the database directory
-- Check that `DATABASE_PATH` is correctly set
-- Delete `bot_data.db` to reset (will re-initialize on next run)
+**X API**: Free tier has strict rate limits
+- Default: 50 requests per 15 minutes
+- Bot checks once per 15 minutes (96 times/day)
+- Should stay within limits
 
-### RSSHub errors
+**YouTube API**: Daily quota limits
+- Each search costs ~100 quota units
+- Daily quota: 10,000 units
+- Bot checks every 15 minutes = 96 checks/day = ~9,600 units
+- Should stay within limits
 
-- Public RSSHub instance may have rate limits or be temporarily down
-- Consider using an alternative instance or self-hosting RSSHub
-- Increase `POLL_INTERVAL_SECONDS` to reduce request frequency
+### Database Not Persisting
 
-### Alternative RSSHub Instances
+**Check artifact upload/download**:
+- Verify "Upload database artifact" step succeeds
+- Check "Download previous database" doesn't fail
+- Artifacts expire after 7 days (adjust if needed)
 
-If `https://rsshub.app` is down or rate-limited, try these alternatives in your `.env`:
+### No Channels Found
 
-```bash
-RSSHUB_INSTANCE=https://rsshub.rssforever.com
-# or
-RSSHUB_INSTANCE=https://rss.fatpandac.com
-# or self-host: https://docs.rsshub.app/en/install/
-```
+**Error**: `No channels named 'ucg-news-bot' found in any guilds`
 
-## Logging
+**Solutions**:
+1. Create a channel named `ucg-news-bot` in your Discord server
+2. Verify bot is in the server (check bot's server list)
+3. Ensure bot has "View Channels" permission
 
-Logs are output to stdout with timestamps. Log levels:
-- `DEBUG`: Detailed information for debugging
-- `INFO`: General informational messages (default)
-- `WARNING`: Warning messages
-- `ERROR`: Error messages
+## Cost Estimate
 
-Set log level in `.env`:
-```bash
-LOG_LEVEL=DEBUG
-```
+### GitHub Actions (Free Tier)
+- **Monthly limit**: 2,000 minutes
+- **Bot runtime**: ~8 seconds per run
+- **Runs per month**: 2,880 (96/day × 30 days)
+- **Total usage**: ~384 minutes/month
+- **Cost**: **FREE** ✅
 
-## Database
+### API Costs
+- **X API Free Tier**: 50 requests per 15 min - **FREE** ✅
+- **YouTube Data API Free Tier**: 10,000 quota units/day - **FREE** ✅
+- **Ultraman APIs**: Unofficial, no rate limits - **FREE** ✅
 
-The bot uses SQLite to store:
-- Last processed tweet ID
-- Discord server list
-- Posted tweets (for deduplication, kept for 30 days)
+**Total monthly cost: $0** 🎉
 
-Database location: `./bot_data.db` (configurable)
+## Security Best Practices
 
-To reset the bot's state:
-```bash
-rm bot_data.db
-```
-
-## Self-Hosting RSSHub (Optional)
-
-For better reliability and no rate limits, consider self-hosting RSSHub:
-
-1. Follow the [RSSHub installation guide](https://docs.rsshub.app/en/install/)
-2. Update your `.env`:
-```bash
-RSSHUB_INSTANCE=http://localhost:1200
-```
-
-Docker example:
-```bash
-docker run -d --name rsshub -p 1200:1200 diygod/rsshub
-```
+✅ **Never commit credentials** to git
+✅ **Use GitHub Secrets** for all API keys
+✅ **.env file is in .gitignore**
+✅ **.env.example has placeholders** only
+✅ **Bot token has minimal permissions**
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+Contributions are welcome! To contribute:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Test locally with `python run_cron.py`
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to your branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 ## License
 
 This project is provided as-is for personal or educational use.
 
-## Support
-
-For issues or questions:
-1. Check the Troubleshooting section
-2. Review logs for error messages
-3. Open an issue on GitHub
-
-## Advantages over Twitter API
-
-- **Free**: No $100/month Twitter API Essential tier required
-- **No authentication**: No need to apply for Twitter developer access
-- **Easy setup**: Just need a Discord bot token
-- **Reliable**: RSSHub is maintained and widely used
-- **Open source**: Both this bot and RSSHub are open source
-
 ## Acknowledgments
 
 - Built with [discord.py](https://github.com/Rapptz/discord.py)
-- RSS parsing with [feedparser](https://github.com/kurtmckee/feedparser)
-- Twitter feeds via [RSSHub](https://github.com/DIYgod/RSSHub)
-- Scheduling with [APScheduler](https://github.com/agronholm/apscheduler)
+- X/Twitter integration via [X API v2](https://developer.twitter.com/en/docs/twitter-api)
+- YouTube integration via [YouTube Data API v3](https://developers.google.com/youtube/v3)
+- Automated with [GitHub Actions](https://github.com/features/actions)
+
+## Support
+
+For issues or questions:
+1. Check the Troubleshooting section above
+2. Review workflow logs in GitHub Actions
+3. Open an issue on GitHub with:
+   - Error message
+   - Steps to reproduce
+   - Workflow run link (if applicable)
+
+---
+
+**Enjoy automated UCG news updates!** 🎮✨

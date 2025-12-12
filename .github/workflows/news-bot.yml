@@ -1,0 +1,60 @@
+name: UCG News Bot
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes
+  workflow_dispatch:  # Manual trigger for testing
+
+jobs:
+  check-news:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Download previous database
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          name: database
+          path: .
+          workflow_conclusion: success
+
+      - name: Run news check
+        env:
+          # Secrets (actual credentials)
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          X_API_BEARER: ${{ secrets.X_API_BEARER }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+
+          # Public configuration (hardcoded)
+          CHANNEL_NAME: ucg-news-bot
+          UCG_EN_X_ID: 1798233243185303552
+          TWITTER_USERNAME: ucg_en
+          YOUTUBE_CHANNEL_ID: UC0WwX8aoBWRAdQ2bM-FD8TQ
+          ULTRAMAN_COLUMN_URL: https://ultraman-cardgame.com/page/us/column/column-list
+          ULTRAMAN_NEWS_URL: https://ultraman-cardgame.com/page/us/news/news-list
+
+          # Bot settings
+          DATABASE_PATH: ./bot_data.db
+          LOG_LEVEL: INFO
+        run: python run_cron.py
+
+      - name: Upload database artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: database
+          path: bot_data.db
+          retention-days: 7

@@ -26,13 +26,11 @@ class Config:
     YOUTUBE_CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID")
 
     # Sources to monitor (optional - configure which are active)
-    FACEBOOK_PAGE = os.getenv("FACEBOOK_PAGE")
     TWITTER_USERNAME = os.getenv("TWITTER_USERNAME")
     ULTRAMAN_COLUMN_URL = os.getenv("ULTRAMAN_COLUMN_URL")
     ULTRAMAN_NEWS_URL = os.getenv("ULTRAMAN_NEWS_URL")
 
     # Bot settings with defaults
-    POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "300"))  # 5 minutes
     CHANNEL_NAME = os.getenv("CHANNEL_NAME", "ucg-news-bot")
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     DATABASE_PATH = os.getenv("DATABASE_PATH", "./bot_data.db")
@@ -58,7 +56,6 @@ class Config:
 
         # Check that at least one source is configured
         has_source = any([
-            cls.FACEBOOK_PAGE,
             cls.TWITTER_USERNAME,
             cls.ULTRAMAN_COLUMN_URL,
             cls.ULTRAMAN_NEWS_URL,
@@ -66,10 +63,7 @@ class Config:
         ])
 
         if not has_source:
-            errors.append("At least one source must be configured (FACEBOOK_PAGE, TWITTER_USERNAME, ULTRAMAN_COLUMN_URL, or ULTRAMAN_NEWS_URL)")
-
-        if cls.POLL_INTERVAL_SECONDS < 60:
-            errors.append("POLL_INTERVAL_SECONDS must be at least 60 seconds")
+            errors.append("At least one source must be configured (TWITTER_USERNAME, ULTRAMAN_COLUMN_URL, ULTRAMAN_NEWS_URL, or YOUTUBE_CHANNEL_ID)")
 
         if errors:
             error_message = "Configuration validation failed:\n" + "\n".join(f"  - {err}" for err in errors)
@@ -80,16 +74,14 @@ class Config:
         """Return all configuration values as a dictionary"""
         return {
             "DISCORD_BOT_TOKEN": "***" if cls.DISCORD_BOT_TOKEN else None,
+            "CHANNEL_NAME": cls.CHANNEL_NAME,
             "X_API_BEARER": "***" if cls.X_API_BEARER else None,
             "UCG_EN_X_ID": cls.UCG_EN_X_ID,
             "YOUTUBE_API_KEY": "***" if cls.YOUTUBE_API_KEY else None,
             "YOUTUBE_CHANNEL_ID": cls.YOUTUBE_CHANNEL_ID,
-            "FACEBOOK_PAGE": cls.FACEBOOK_PAGE,
             "TWITTER_USERNAME": cls.TWITTER_USERNAME,
             "ULTRAMAN_COLUMN_URL": cls.ULTRAMAN_COLUMN_URL,
             "ULTRAMAN_NEWS_URL": cls.ULTRAMAN_NEWS_URL,
-            "POLL_INTERVAL_SECONDS": cls.POLL_INTERVAL_SECONDS,
-            "CHANNEL_NAME": cls.CHANNEL_NAME,
             "LOG_LEVEL": cls.LOG_LEVEL,
             "DATABASE_PATH": cls.DATABASE_PATH,
         }
