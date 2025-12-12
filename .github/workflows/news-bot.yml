@@ -1,9 +1,9 @@
 name: UCG News Bot
 
 on:
-  workflow_dispatch:  # Manual trigger for testing
+  # workflow_dispatch:  # Manual trigger for testing
   schedule:
-    - cron: "*/15 * * * *"  # Every 15 minutes
+    - cron: "5/15 * * * *"  # Every 15 minutes
 
 
 jobs:
