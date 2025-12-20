@@ -68,7 +68,7 @@ if gcloud run jobs describe "${JOB_NAME}" --region="${REGION}" &> /dev/null; the
         --region="${REGION}" \
         --max-retries=1 \
         --task-timeout=5m \
-        --set-env-vars="CHANNEL_NAME=ucg-news-bot,UCG_EN_X_ID=1798233243185303552,TWITTER_USERNAME=ucg_en,YOUTUBE_CHANNEL_ID=UC0WwX8aoBWRAdQ2bM-FD8TQ,ULTRAMAN_COLUMN_URL=https://ultraman-cardgame.com/page/us/column/column-list,ULTRAMAN_NEWS_URL=https://ultraman-cardgame.com/page/us/news/news-list,DATABASE_PATH=/data/bot_data.db,LOG_LEVEL=INFO,GCS_BUCKET_NAME=${BUCKET_NAME}" \
+        --set-env-vars="CHANNEL_NAME=ucg-news-bot,UCG_EN_X_ID=1798233243185303552,TWITTER_USERNAME=ucg_en,YOUTUBE_CHANNEL_ID=UC0WwX8aoBWRAdQ2bM-FD8TQ,ULTRAMAN_COLUMN_URL=https://ultraman-cardgame.com/page/us/column/column-list,ULTRAMAN_NEWS_URL=https://ultraman-cardgame.com/page/us/news/news-list,DATABASE_PATH=/tmp/bot_data.db,LOG_LEVEL=INFO,GCS_BUCKET_NAME=${BUCKET_NAME}" \
         --set-secrets="DISCORD_BOT_TOKEN=DISCORD_BOT_TOKEN:latest,X_API_BEARER=X_API_BEARER:latest,YOUTUBE_API_KEY=YOUTUBE_API_KEY:latest"
 else
     echo "Creating new Cloud Run Job..."
@@ -77,7 +77,7 @@ else
         --region="${REGION}" \
         --max-retries=1 \
         --task-timeout=5m \
-        --set-env-vars="CHANNEL_NAME=ucg-news-bot,UCG_EN_X_ID=1798233243185303552,TWITTER_USERNAME=ucg_en,YOUTUBE_CHANNEL_ID=UC0WwX8aoBWRAdQ2bM-FD8TQ,ULTRAMAN_COLUMN_URL=https://ultraman-cardgame.com/page/us/column/column-list,ULTRAMAN_NEWS_URL=https://ultraman-cardgame.com/page/us/news/news-list,DATABASE_PATH=/data/bot_data.db,LOG_LEVEL=INFO,GCS_BUCKET_NAME=${BUCKET_NAME}" \
+        --set-env-vars="CHANNEL_NAME=ucg-news-bot,UCG_EN_X_ID=1798233243185303552,TWITTER_USERNAME=ucg_en,YOUTUBE_CHANNEL_ID=UC0WwX8aoBWRAdQ2bM-FD8TQ,ULTRAMAN_COLUMN_URL=https://ultraman-cardgame.com/page/us/column/column-list,ULTRAMAN_NEWS_URL=https://ultraman-cardgame.com/page/us/news/news-list,DATABASE_PATH=/tmp/bot_data.db,LOG_LEVEL=INFO,GCS_BUCKET_NAME=${BUCKET_NAME}" \
         --set-secrets="DISCORD_BOT_TOKEN=DISCORD_BOT_TOKEN:latest,X_API_BEARER=X_API_BEARER:latest,YOUTUBE_API_KEY=YOUTUBE_API_KEY:latest"
 fi
 
@@ -89,7 +89,7 @@ if gcloud scheduler jobs describe "${SCHEDULER_NAME}" --location="${REGION}" &> 
     echo "Updating existing Cloud Scheduler job..."
     gcloud scheduler jobs update http "${SCHEDULER_NAME}" \
         --location="${REGION}" \
-        --schedule="5/15 * * * *" \
+        --schedule="0,15 19 * * *" \
         --uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/${JOB_NAME}:run" \
         --http-method=POST \
         --oauth-service-account-email="${PROJECT_ID}@appspot.gserviceaccount.com"
@@ -97,7 +97,7 @@ else
     echo "Creating new Cloud Scheduler job..."
     gcloud scheduler jobs create http "${SCHEDULER_NAME}" \
         --location="${REGION}" \
-        --schedule="1/15 * * * *" \
+        --schedule="0,15 19 * * *" \
         --uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/${JOB_NAME}:run" \
         --http-method=POST \
         --oauth-service-account-email="${PROJECT_ID}@appspot.gserviceaccount.com" \

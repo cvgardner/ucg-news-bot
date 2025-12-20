@@ -1,7 +1,8 @@
 """X (Twitter) API client for fetching tweets"""
 import aiohttp
+import logging
 from typing import Optional
-from utils.logger import get_logger
+from utils.logger import get_logger, log_with_context
 from utils.error_handler import retry_with_backoff
 
 logger = get_logger(__name__)
@@ -31,7 +32,11 @@ class XAPIClient:
             URL of the latest tweet, or None if error
         """
         try:
-            logger.debug(f"Fetching tweets for user ID: {self.user_id}")
+            log_with_context(
+                logger, logging.INFO, "Starting X API request",
+                user_id=self.user_id,
+                username=self.username or "unknown"
+            )
 
             url = f"{self.base_url}/users/{self.user_id}/tweets"
             headers = {
@@ -39,26 +44,63 @@ class XAPIClient:
                 "User-Agent": "UCG-News-Bot/1.0"
             }
 
+            log_with_context(
+                logger, logging.DEBUG, "Making HTTP GET request",
+                url=url,
+                timeout=30
+            )
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     url,
                     headers=headers,
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as response:
-                    if response.status == 429:
-                        logger.error("X API rate limit reached. Please wait before retrying.")
+                    status_code = response.status
+
+                    log_with_context(
+                        logger, logging.DEBUG, "Received X API response",
+                        status_code=status_code,
+                        user_id=self.user_id
+                    )
+
+                    if status_code == 429:
+                        # Rate limit - try to get reset time from headers
+                        rate_limit_reset = response.headers.get("x-rate-limit-reset", "unknown")
+                        rate_limit_remaining = response.headers.get("x-rate-limit-remaining", "unknown")
+
+                        log_with_context(
+                            logger, logging.ERROR, "X API rate limit reached",
+                            user_id=self.user_id,
+                            rate_limit_reset=rate_limit_reset,
+                            rate_limit_remaining=rate_limit_remaining
+                        )
                         return None
 
-                    if response.status != 200:
+                    if status_code != 200:
                         error_text = await response.text()
-                        logger.error(f"X API request failed: {response.status} - {error_text}")
+                        log_with_context(
+                            logger, logging.ERROR, "X API request failed",
+                            status_code=status_code,
+                            user_id=self.user_id,
+                            error_text=error_text[:500]  # Limit error text length
+                        )
                         return None
 
                     data = await response.json()
 
+                    log_with_context(
+                        logger, logging.DEBUG, "Successfully parsed X API response",
+                        user_id=self.user_id,
+                        has_data="data" in data,
+                        data_count=len(data.get("data", []))
+                    )
+
             # Extract the first tweet's ID
             if "data" in data and len(data["data"]) > 0:
-                tweet_id = data["data"][0]["id"]
+                tweet_data = data["data"][0]
+                tweet_id = tweet_data["id"]
+                tweet_text = tweet_data.get("text", "")[:100]  # First 100 chars
 
                 # Use username if available, otherwise use generic format
                 if self.username:
@@ -66,15 +108,41 @@ class XAPIClient:
                 else:
                     tweet_url = f"https://x.com/i/web/status/{tweet_id}"
 
-                logger.info(f"Found latest tweet: {tweet_url}")
+                log_with_context(
+                    logger, logging.INFO, "Successfully fetched latest tweet",
+                    user_id=self.user_id,
+                    username=self.username or "unknown",
+                    tweet_id=tweet_id,
+                    tweet_url=tweet_url,
+                    tweet_preview=tweet_text
+                )
                 return tweet_url
             else:
-                logger.warning(f"No tweets found for user ID: {self.user_id}")
+                # Log more details about why no tweets were found
+                log_with_context(
+                    logger, logging.WARNING, "No tweets found in X API response",
+                    user_id=self.user_id,
+                    username=self.username or "unknown",
+                    response_has_data="data" in data,
+                    response_keys=list(data.keys()),
+                    data_length=len(data.get("data", []))
+                )
                 return None
 
         except aiohttp.ClientError as e:
-            logger.error(f"HTTP error fetching tweets: {e}")
+            log_with_context(
+                logger, logging.ERROR, "HTTP client error fetching tweets",
+                user_id=self.user_id,
+                error_type=type(e).__name__,
+                error_message=str(e)
+            )
             return None
         except Exception as e:
-            logger.error(f"Error fetching tweets: {e}", exc_info=True)
+            log_with_context(
+                logger, logging.ERROR, "Unexpected error fetching tweets",
+                user_id=self.user_id,
+                error_type=type(e).__name__,
+                error_message=str(e)
+            )
+            logger.error(f"Full traceback for user {self.user_id}:", exc_info=True)
             return None

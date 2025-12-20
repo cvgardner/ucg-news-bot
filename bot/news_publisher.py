@@ -1,5 +1,6 @@
 """News publisher for stateless cron execution"""
 import asyncio
+import logging
 import discord
 from bot.database import Database
 from bot.x_api import XAPIClient
@@ -7,7 +8,7 @@ from bot.ultraman_column_api import UltramanColumnAPIClient
 from bot.ultraman_news_api import UltramanNewsAPIClient
 from bot.youtube_api import YouTubeAPIClient
 from config import Config
-from utils.logger import get_logger
+from utils.logger import get_logger, log_with_context
 
 logger = get_logger(__name__)
 
@@ -80,16 +81,25 @@ class NewsPublisher:
 
     async def run(self):
         """Main execution flow for cron job"""
-        logger.info("Starting news check...")
+        log_with_context(
+            logger, logging.INFO, "Starting news check",
+            database_path=self.database_path,
+            channel_name=self.channel_name
+        )
 
         # Initialize database
         db = Database(self.database_path)
         await db.connect()
         await db.initialize_schema()
-        logger.info("Database initialized")
 
         # Setup scrapers
         self._setup_scrapers()
+
+        log_with_context(
+            logger, logging.INFO, "Checking all configured sources",
+            total_sources=len(self.scrapers),
+            source_names=[getattr(s, 'source_name', 'unknown') for s in self.scrapers]
+        )
 
         # Check all sources
         for scraper in self.scrapers:
@@ -100,7 +110,11 @@ class NewsPublisher:
 
         # Close database
         await db.close()
-        logger.info("News check complete")
+
+        log_with_context(
+            logger, logging.INFO, "News check complete",
+            total_sources_checked=len(self.scrapers)
+        )
 
     async def _check_source(self, scraper, db: Database):
         """
@@ -110,28 +124,66 @@ class NewsPublisher:
             scraper: Scraper instance (WebScraper, XAPIClient, etc.)
             db: Database instance
         """
+        source_name = getattr(scraper, 'source_name', 'unknown')
+
         try:
+            log_with_context(
+                logger, logging.INFO, "Checking source for new posts",
+                source_name=source_name
+            )
+
             # Get latest post URL
             post_url = await scraper.get_latest_post_url()
 
             if not post_url:
-                logger.debug(f"No post found from {scraper.source_name}")
+                log_with_context(
+                    logger, logging.WARNING, "No post found from source",
+                    source_name=source_name,
+                    reason="get_latest_post_url returned None"
+                )
                 return
+
+            log_with_context(
+                logger, logging.INFO, "Retrieved latest post URL from source",
+                source_name=source_name,
+                post_url=post_url
+            )
 
             # Check if already posted
             if await db.is_post_seen(post_url):
-                logger.debug(f"Already posted: {post_url}")
+                log_with_context(
+                    logger, logging.INFO, "Post already seen, skipping",
+                    source_name=source_name,
+                    post_url=post_url
+                )
                 return
 
             # New post found! Post to Discord
-            logger.info(f"New post from {scraper.source_name}: {post_url}")
-            await self._post_to_discord(post_url, scraper.source_name)
+            log_with_context(
+                logger, logging.INFO, "New post detected, posting to Discord",
+                source_name=source_name,
+                post_url=post_url
+            )
+
+            await self._post_to_discord(post_url, source_name)
 
             # Mark as seen
-            await db.mark_post_seen(post_url, scraper.source_name)
+            await db.mark_post_seen(post_url, source_name)
+
+            log_with_context(
+                logger, logging.INFO, "Successfully processed new post",
+                source_name=source_name,
+                post_url=post_url
+            )
 
         except Exception as e:
-            logger.error(f"Error checking source {scraper.source_name}: {e}", exc_info=True)
+            log_with_context(
+                logger, logging.ERROR, "Error checking source",
+                source_name=source_name,
+                error_type=type(e).__name__,
+                error_message=str(e)
+            )
+            logger.error(f"Full traceback for source {source_name}:", exc_info=True)
 
     async def _post_to_discord(self, url: str, source_name: str):
         """
@@ -144,6 +196,13 @@ class NewsPublisher:
         success = 0
         failed = 0
 
+        log_with_context(
+            logger, logging.INFO, "Initializing Discord client for posting",
+            url=url,
+            source_name=source_name,
+            channel_name=self.channel_name
+        )
+
         # Create Discord client with guild intents
         intents = discord.Intents.default()
         intents.guilds = True
@@ -154,25 +213,69 @@ class NewsPublisher:
             """Called when client is ready - do the posting here"""
             nonlocal success, failed
 
-            logger.debug(f"Discord client ready as {client.user}")
+            log_with_context(
+                logger, logging.INFO, "Discord client connected",
+                bot_user=str(client.user),
+                total_guilds=len(client.guilds),
+                guild_names=[g.name for g in client.guilds]
+            )
 
             # Discover channels by name across all guilds
             for guild in client.guilds:
+                log_with_context(
+                    logger, logging.DEBUG, "Searching for channel in guild",
+                    guild_name=guild.name,
+                    guild_id=guild.id,
+                    channel_name=self.channel_name
+                )
                 channel = discord.utils.get(guild.text_channels, name=self.channel_name)
 
                 if not channel:
+                    log_with_context(
+                        logger, logging.DEBUG, "Channel not found in guild",
+                        guild_name=guild.name,
+                        channel_name=self.channel_name,
+                        available_channels=[c.name for c in guild.text_channels[:10]]  # First 10
+                    )
                     continue
+
+                log_with_context(
+                    logger, logging.INFO, "Found target channel in guild",
+                    guild_name=guild.name,
+                    channel_name=channel.name,
+                    channel_id=channel.id
+                )
 
                 # Check permissions
                 permissions = channel.permissions_for(guild.me)
                 if not permissions.send_messages:
-                    logger.warning(f"Missing send permissions in {guild.name} #{channel.name}")
+                    log_with_context(
+                        logger, logging.ERROR, "Missing send_messages permission",
+                        guild_name=guild.name,
+                        channel_name=channel.name,
+                        has_send_messages=permissions.send_messages,
+                        has_create_threads=permissions.create_public_threads
+                    )
                     failed += 1
                     continue
 
                 try:
+                    log_with_context(
+                        logger, logging.INFO, "Sending message to channel",
+                        guild_name=guild.name,
+                        channel_name=channel.name,
+                        url=url
+                    )
+
                     # Send the link
                     message = await channel.send(url)
+
+                    log_with_context(
+                        logger, logging.INFO, "Message sent successfully",
+                        guild_name=guild.name,
+                        channel_name=channel.name,
+                        message_id=message.id
+                    )
 
                     # Create thread from message (auto-archives after 24 hours)
                     try:
@@ -185,37 +288,83 @@ class NewsPublisher:
                             name=thread_name,
                             auto_archive_duration=1440
                         )
-                        logger.info(f"✓ Created thread '{thread_name}' in {guild.name}")
+
+                        log_with_context(
+                            logger, logging.INFO, "Thread created successfully",
+                            guild_name=guild.name,
+                            thread_name=thread_name
+                        )
                     except discord.Forbidden:
-                        logger.error(f"✗ THREAD CREATION FAILED: Missing 'Create Public Threads' permission in {guild.name}")
-                        logger.error(f"   → Please enable 'Create Public Threads' permission for the bot role in {guild.name}")
+                        log_with_context(
+                            logger, logging.ERROR, "Thread creation failed - missing permissions",
+                            guild_name=guild.name,
+                            channel_name=channel.name,
+                            error="Missing 'Create Public Threads' permission"
+                        )
                         # Post succeeded even if thread creation failed
                     except discord.HTTPException as e:
-                        logger.error(f"✗ THREAD CREATION FAILED in {guild.name}: {e}")
-                        logger.error(f"   → Discord API error. Channel type: {channel.type}")
+                        log_with_context(
+                            logger, logging.ERROR, "Thread creation failed - Discord API error",
+                            guild_name=guild.name,
+                            channel_type=str(channel.type),
+                            error_message=str(e)
+                        )
                         # Post succeeded even if thread creation failed
                     except Exception as e:
-                        logger.error(f"✗ THREAD CREATION FAILED in {guild.name}: Unexpected error - {e}")
+                        log_with_context(
+                            logger, logging.ERROR, "Thread creation failed - unexpected error",
+                            guild_name=guild.name,
+                            error_type=type(e).__name__,
+                            error_message=str(e)
+                        )
                         # Post succeeded even if thread creation failed
 
                     success += 1
-                    logger.info(f"Posted to {guild.name} #{channel.name}")
+
+                    log_with_context(
+                        logger, logging.INFO, "Successfully posted to guild",
+                        guild_name=guild.name,
+                        channel_name=channel.name,
+                        url=url
+                    )
 
                 except discord.Forbidden:
-                    logger.error(f"Missing permissions in {guild.name}")
+                    log_with_context(
+                        logger, logging.ERROR, "Failed to post - forbidden",
+                        guild_name=guild.name,
+                        channel_name=channel.name if channel else "unknown"
+                    )
                     failed += 1
                 except discord.HTTPException as e:
-                    logger.error(f"HTTP error in {guild.name}: {e}")
+                    log_with_context(
+                        logger, logging.ERROR, "Failed to post - HTTP error",
+                        guild_name=guild.name,
+                        error_message=str(e)
+                    )
                     failed += 1
                 except Exception as e:
-                    logger.error(f"Unexpected error in {guild.name}: {e}")
+                    log_with_context(
+                        logger, logging.ERROR, "Failed to post - unexpected error",
+                        guild_name=guild.name,
+                        error_type=type(e).__name__,
+                        error_message=str(e)
+                    )
                     failed += 1
 
             if success == 0 and failed == 0:
-                logger.warning(f"No channels named '{self.channel_name}' found in any guilds")
+                log_with_context(
+                    logger, logging.WARNING, "No target channels found in any guilds",
+                    channel_name=self.channel_name,
+                    total_guilds=len(client.guilds),
+                    guild_names=[g.name for g in client.guilds]
+                )
 
-            logger.info(
-                f"Posted {source_name} link: {success} successful, {failed} failed"
+            log_with_context(
+                logger, logging.INFO, "Discord posting complete",
+                source_name=source_name,
+                url=url,
+                successful_posts=success,
+                failed_posts=failed
             )
 
             # Close client after posting
